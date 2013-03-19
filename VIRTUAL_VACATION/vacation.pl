@@ -74,8 +74,11 @@
 # 2012-04-19  Jan Kruis <jan at crossreference dot nl>
 #             change SQL query for vacation into function.
 #             Add sub get_interval()
-#             Gives the user the option to set the interval time ( 0 = one reply, 1 = autoreply, > 1 = Delay reply ) 
+#             Gives the user the option to set the interval time ( 0 = one reply, 1 = autoreply, > 1 = Delay reply )
 #             See https://sourceforge.net/tracker/?func=detail&aid=3508083&group_id=191583&atid=937966
+#
+# 20113-03-20 Rudi Floren <rudi.floren@gmail.com>
+#             Added opportunity to change do-not-reply sender recognition pattern.
 
 # Requirements - the following perl modules are required:
 # DBD::Pg or DBD::mysql
@@ -143,7 +146,7 @@ our $smtp_server = 'localhost';
 our $smtp_server_port = 25;
 
 # this is the helo we [the vacation script] use on connection; you may need to change this to your hostname or something,
-# depending upon what smtp helo restrictions you have in place within Postfix. 
+# depending upon what smtp helo restrictions you have in place within Postfix.
 our $smtp_client = 'localhost';
 
 # SMTP authentication protocol used for sending.
@@ -174,13 +177,11 @@ our $log_to_file = 0;
 # disabled by default
 our $interval = 0;
 
-# Send vacation mails to do-not-reply email adresses.
-# By default vacation email adresses will be sent.
-# For now emails from bounce|do-not-reply|facebook|linkedin|list-|myspace|twitter won't
-# be answered when $custom_noreply_pattern is set to 1.
-# default = 0
-our $custom_noreply_pattern = 0;
-our $noreply_pattern = 'bounce|do-not-reply|facebook|linkedin|list-|myspace|twitter'; 
+
+# Configure regx pattern to test if sender is maillist or do-not-reply address.
+# Mails to a matching address will not be sent.
+# default = '^(noreply|postmaster|mailer\-daemon|listserv|majordomo|owner\-|request\-|bounces\-)|\-(owner|request|bounces)\@'
+our $noreply_pattern = '^(noreply|postmaster|mailer\-daemon|listserv|majordomo|owner\-|request\-|bounces\-)|\-(owner|request|bounces)\@';
 
 
 # instead of changing this script, you can put your settings to /etc/mail/postfixadmin/vacation.conf
@@ -282,7 +283,7 @@ if ($db_type eq 'mysql') {
 my $loopcount=0;
 
 #
-# Get interval_time for email user from the vacation table 
+# Get interval_time for email user from the vacation table
 #
 sub get_interval {
     my ($to) = @_;
@@ -365,7 +366,7 @@ sub already_notified {
 }
 
 #
-# Check to see if there is a vacation record against a specific email address. 
+# Check to see if there is a vacation record against a specific email address.
 #
 sub check_for_vacation {
     my ($email_to_check) =@_;
@@ -590,13 +591,12 @@ sub panic_execute {
 
 # Make sure the email wasn't sent by someone who could be a mailing list etc; if it was,
 # then we abort after appropriate logging.
+# Pattern can be changed in config.
 sub check_and_clean_from_address {
     my ($address) = @_;
     my $logger = get_logger();
 
-    if($address =~ /^(noreply|postmaster|mailer\-daemon|listserv|majordomo|owner\-|request\-|bounces\-)/i ||
-        $address =~ /\-(owner|request|bounces)\@/i ||
-        ($custom_noreply_pattern == 1 && $address =~ /^.*($noreply_pattern).*/i) ) {
+    if($address =~ /($noreply_pattern)/i ) {
         $logger->debug("sender $address contains $1 - will not send vacation message");
         exit(0);
     }
